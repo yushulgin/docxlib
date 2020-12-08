@@ -12,6 +12,14 @@ type Relationships struct {
 	StartId     int
 }
 
+func GenerateRelationships(relationships *yaxml.Element) *Relationships {
+	return &Relationships{
+		Relation:    relationships,
+		FileMapping: nil,
+		StartId:     100,
+	}
+}
+
 func (r *Relationships) GenerateId() string {
 	rid := r.StartId
 	r.StartId++

@@ -151,7 +151,7 @@ func (e *Element) FindAll(tagName string) (res []*Element) {
 	return
 }
 
-func (e *Element) extract() (err error) {
+func (e *Element) Extract() (err error) {
 	if e.Parent == nil {
 		return
 	}

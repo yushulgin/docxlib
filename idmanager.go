@@ -26,6 +26,12 @@ func GenerateIdAble() (ia *IdAble, err error) {
 	return
 }
 
+func (id *IdAble) GetIdAndInc() int {
+	part := id.Part
+	id.Part += 1
+	return part
+}
+
 func GenerateId(sid, suffix, separation string) (toId string) {
 	if sid == "" {
 		return

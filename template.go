@@ -31,14 +31,14 @@ func GetImageRelationshipDom(rid, filename string) (dom *yaxml.Element) {
 
 var image_template = `<w:p><w:pPr><w:jc w:val="%s"/><w:rPr><w:rFonts w:ascii="Xingkai TC Light" w:eastAsia="Xingkai TC Light" w:hAnsi="Xingkai TC Light"` +
 	` w:hint="eastAsia"/></w:rPr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Xingkai TC Light" w:eastAsia="Xingkai TC Light" w:hAnsi="Xingkai TC Light"/><w:noProof/>` +
-	`</w:rPr><w:drawing><wp:inline><wp:extent cx="%.2f" cy="%.2f"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1" name="picture 1"/><wp:cNvGraphicFramePr>` +
+	`</w:rPr><w:drawing><wp:inline><wp:extent cx="%d" cy="%d"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="1" name="picture 1"/><wp:cNvGraphicFramePr>` +
 	`<a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic ` +
 	`xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
 	`<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill>` +
-	`<a:blip r:embed="%s"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="%.2f" cy="%.2f"/></a:xfrm><a:prstGeom prst="rect">` +
+	`<a:blip r:embed="%s"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="%d" cy="%d"/></a:xfrm><a:prstGeom prst="rect">` +
 	`<a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
 
-func GetImageDom(rid string, width float64, height float64, align string) (dom *yaxml.Element) {
+func GetImageDom(rid string, width int, height int, align string) (dom *yaxml.Element) {
 	image := fmt.Sprintf(image_template, align, width, height, rid, width, height)
 	dom = yaxml.GenerateElement(image, nil, yaxml.ORIGINAL)
 	return

@@ -71,7 +71,7 @@ func (c *ContentTypes) AppendDocx(filename string) {
 	c.Content.Find("Types").Append(GetChunkContenDom(filename))
 }
 
-func (c *ContentTypes) AppendExtensio(suffix string) {
+func (c *ContentTypes) AppendExtension(suffix string) {
 	suffix = strings.ToLower(suffix)
 	if suffix == "png" {
 		c.AppendPng()
