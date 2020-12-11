@@ -8,7 +8,7 @@ import (
 func GenerateTag(text string) (res []string) {
 	var startIndex = 0
 	var endIndex = 0
-	text = strings.Replace(text, "\n", "", -1)
+	text = strings.ReplaceAll(text, "\r\n", "")
 	for index := 0; index < len(text); index++ {
 		if text[index] == '<' {
 			startIndex = index

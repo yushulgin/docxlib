@@ -35,7 +35,6 @@ func NumToHans(num int) string {
 		temp += (NUM[curNum] + UNIT[curUint])
 		zero = false
 	}
-	// fmt.Println()
 	if zero {
 		temp = temp[:len(temp)-3]
 	}
@@ -47,10 +46,14 @@ func NumToHans(num int) string {
 
 func Parser(text string) *yaxml.Element {
 	g := yaxml.GenerateTag(text)
+
 	root := yaxml.GenerateElement("", nil, yaxml.ROOT)
+
 	var stack = make([]*yaxml.Element, 0)
 	stack = append(stack, root)
+
 	for _, tag := range g {
+
 		if yaxml.IsDocumentStart(tag) {
 			root.Append(yaxml.GenerateElement(tag, nil, yaxml.DOCUMENT_START))
 			continue
@@ -69,5 +72,6 @@ func Parser(text string) *yaxml.Element {
 			stack[len(stack)-1].Append(yaxml.GenerateElement(tag, nil, yaxml.TEXT))
 		}
 	}
+
 	return root
 }

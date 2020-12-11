@@ -55,9 +55,10 @@ func (r *Relationships) GetFileMapping() map[string]string {
 }
 
 func (r *Relationships) AppendRelationship(suffix string) (res map[string]string) {
+	res = make(map[string]string, 0)
 	tempId := r.GenerateId()
 	rid := "rId" + tempId
-	filename := "image" + tempId + "." + suffix
+	filename := "image" + tempId + suffix
 	dom := GetImageRelationshipDom(rid, filename)
 	r.Relation.Find("Relationships").Append(dom)
 	res["rid"] = rid

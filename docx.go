@@ -2,6 +2,7 @@ package docxlib
 
 import (
 	"archive/zip"
+	"bufio"
 	"fmt"
 	"image"
 	"io"
@@ -14,10 +15,14 @@ import (
 
 	"strings"
 
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+
 	"github.com/google/uuid"
 )
 
-var TEMP_BASE_DIR = path.Join("/tmp", "docxs_temp")
+var TEMP_BASE_DIR = path.Join("/tmp", "/docx_temp")
 
 type Docx struct {
 	*IdAble
@@ -45,19 +50,24 @@ func NewDocx(zipPath string, clearContent bool) (docx *Docx, err error) {
 		return
 	}
 	if !exist {
-		err = os.Mkdir(TEMP_BASE_DIR, os.ModePerm)
+		err = os.Mkdir(TEMP_BASE_DIR, 0777)
 		if err != nil {
 			return
 		}
 	}
 	// TODO
+	docx.Document = nil
+	docx.ContentTypes = nil
+	docx.Relationships = nil
+	docx.Numbering = ""
+	docx.Styles = ""
 	uid, err := uuid.NewUUID()
 	if err != nil {
 		return
 	}
 	docx.BaseDir = strings.ReplaceAll(uid.String(), "-", "")
 	docx.FilePath = path.Join(TEMP_BASE_DIR, docx.BaseDir)
-	err = os.Mkdir(docx.FilePath, os.ModePerm)
+	err = os.Mkdir(docx.FilePath, 0777)
 	if err != nil {
 		return
 	}
@@ -65,7 +75,18 @@ func NewDocx(zipPath string, clearContent bool) (docx *Docx, err error) {
 	if err != nil {
 		return
 	}
+
 	// TODO
+	_, err = docx.GetDocument()
+	_, err = docx.getContentTypes()
+	_, err = docx.GetRelationships(false)
+	docx.ReplaceMap = make(map[string]string, 0)
+	if clearContent {
+		docx.Document.ClearContentWithoutHeader()
+	}
+	docx.RelsDict = make(map[string]string, 0)
+	docx.RelsFiles = make(map[string]bool, 0)
+	docx.CurrentIdTarget = make(map[string]bool, 0)
 	return
 }
 
@@ -80,6 +101,7 @@ func (d *Docx) GetDocument() (*Document, error) {
 	}
 	document := Parser(docStr)
 	d.Document = GenerateDocument(document)
+
 	return d.Document, nil
 }
 
@@ -99,17 +121,19 @@ func (d *Docx) GetRelationships(refresh bool) (*Relationships, error) {
 
 func (d *Docx) getAllIdTarget(refresh bool) (dic map[string]string, err error) {
 	//
+	dic = make(map[string]string, 0)
 	r, err := d.GetRelationships(true)
 	if err != nil {
 		dic = d.RelsDict
 		return
 	}
 	rels := r.GetRelationships()
-
 	for _, rel := range rels {
+		_ = rel
 		dic[rel.GetItem("Id")] = filepath.Base(rel.GetItem("Target"))
 	}
 	d.RelsDict = dic
+
 	return
 }
 
@@ -130,6 +154,7 @@ func (d *Docx) getRelsAllFiles(refresh bool) (files map[string]bool, err error) 
 }
 
 func (d *Docx) getCurrentIdTYarget(refresh bool) (ret map[string]bool, err error) {
+	ret = make(map[string]bool, 0)
 	if d.CurrentIdTarget != nil && !refresh {
 		ret = d.CurrentIdTarget
 		return
@@ -188,13 +213,17 @@ func (d *Docx) getContentTypes() (*ContentTypes, error) {
 	return d.ContentTypes, nil
 }
 
-func (d *Docx) Merge(filelist []string, page bool, remove bool) {
+func (d *Docx) Merge(filelist []string, page bool, remove bool) (err error) {
 	for _, file := range filelist {
 		exist, err := PathExists(file)
 		if !exist || err != nil {
+			err = nil
 			continue
 		}
-		curFile := d.cpFile(file)
+		curFile, err := d.cpFile(file)
+		if err != nil {
+			return err
+		}
 		d.ContentTypes.AppendDocx(curFile)
 		rid := d.Relationships.AppendChunk(curFile)
 		if page {
@@ -205,15 +234,18 @@ func (d *Docx) Merge(filelist []string, page bool, remove bool) {
 			_ = os.Remove(file)
 		}
 	}
+	return
 }
 
 func (d *Docx) Save(name string) (err error) {
 	d.saveDocument()
 	d.saveContentTypes()
+
 	d.saveRelationships()
+
 	d.getCurrentIdTYarget(true)
+
 	err = d.Zip(name)
-	// BUG 可能
 	if err != nil {
 		return
 	}
@@ -222,8 +254,8 @@ func (d *Docx) Save(name string) (err error) {
 
 func (d *Docx) saveDocument() (err error) {
 	document := d.Document.ToString()
-	for _, key := range d.ReplaceMap {
-		document = strings.ReplaceAll(document, key, d.ReplaceMap[key])
+	for key, value := range d.ReplaceMap {
+		document = strings.ReplaceAll(document, key, value)
 	}
 	err = writeStringToFile(path.Join(d.FilePath, "word/document.xml"), document)
 	return
@@ -243,23 +275,27 @@ func (d *Docx) AppendParagraph(text, align string) {
 	d.Document.AppendParagraph(text, align)
 }
 
-func (d *Docx) AppendPicture(filepath, align string) (err error) {
-	if exists, err := PathExists(filepath); !exists || err != nil {
-		return err
+func (d *Docx) AppendPicture(srcfilepath, align string) (err error) {
+	if exists, err := PathExists(srcfilepath); !exists || err != nil {
+		return fmt.Errorf("filepath not exists!")
 	}
+
 	mediaDir := path.Join(d.FilePath, "word/media")
 	exists, err := PathExists(mediaDir)
 	if err != nil {
 		return
 	}
 	if !exists {
-		os.Mkdir(mediaDir, os.ModePerm)
+		os.Mkdir(mediaDir, 0777)
 	}
-	suffix := path.Ext(filepath)
+	suffix := path.Ext(srcfilepath)
 	d.ContentTypes.AppendExtension(suffix)
 	idFile := d.Relationships.AppendRelationship(suffix)
 	filePath := path.Join(d.FilePath, fmt.Sprintf("word/media/%s", idFile["filename"]))
-	exec.Command(fmt.Sprintf("cp %s %s", filepath, filePath))
+	_, err = CopyFile(filePath, srcfilepath)
+	if err != nil {
+		return
+	}
 	file, err := os.Open(filePath)
 	if err != nil {
 		return
@@ -269,8 +305,8 @@ func (d *Docx) AppendPicture(filepath, align string) (err error) {
 	if err != nil {
 		return
 	}
-	width := c.Width
-	height := c.Height
+	width := c.Width * 6350
+	height := c.Height * 6350
 	d.Document.AppendPicture(idFile["rid"], width, height, align)
 	return
 }
@@ -283,15 +319,16 @@ func (d *Docx) Close() {
 	_ = exec.Command(fmt.Sprintf("rm -rf %s", d.FilePath))
 }
 
-func (d *Docx) cpFile(filename string) string {
-	docPath := path.Join(TEMP_BASE_DIR, d.FilePath)
+func (d *Docx) cpFile(filename string) (string, error) {
 	partId := d.GetIdAndInc()
 	basename := filepath.Base(filename)
 	tFileBase := GenerateFileName(basename, fmt.Sprintf("part%d", partId), false)
-	tFile := filepath.Join(docPath, tFileBase)
-	cp := fmt.Sprintf("cp %s %s", filename, tFile)
-	_ = exec.Command(cp)
-	return tFileBase
+	tFile := filepath.Join(d.FilePath, tFileBase)
+	_, err := CopyFile(tFile, filename)
+	if err != nil {
+		return tFileBase, err
+	}
+	return tFileBase, nil
 }
 
 func Unzip(zipFile string, destDir string) error {
@@ -304,9 +341,9 @@ func Unzip(zipFile string, destDir string) error {
 	for _, f := range zipReader.File {
 		fpath := filepath.Join(destDir, f.Name)
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(fpath, os.ModePerm)
+			os.MkdirAll(fpath, 0777)
 		} else {
-			if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			if err = os.MkdirAll(filepath.Dir(fpath), 0777); err != nil {
 				return err
 			}
 
@@ -360,7 +397,7 @@ func ReadAll(filePth string) (string, error) {
 //写入文件
 func writeStringToFile(filepath, content string) (err error) {
 	//打开文件，没有则创建，有则append内容
-	w1, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	w1, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 
 	if err != nil {
 		return
@@ -379,7 +416,7 @@ func writeStringToFile(filepath, content string) (err error) {
 
 // srcFile could be a single file or a directory
 func (d *Docx) Zip(destZip string) error {
-	srcFile := d.FilePath
+	srcFile := d.FilePath + string(filepath.Separator)
 	zipfile, err := os.Create(destZip)
 	if err != nil {
 		return err
@@ -393,30 +430,29 @@ func (d *Docx) Zip(destZip string) error {
 		if err != nil {
 			return err
 		}
-
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-
-		header.Name = strings.TrimPrefix(path, filepath.Dir(srcFile)+"/")
-		var flag = true
-		pathSlice := strings.Split(path, d.BaseDir)
-		header.Name = pathSlice[len(pathSlice)-1]
 		if info.IsDir() {
-			header.Name += "/"
-		} else {
-			header.Method = zip.Deflate
-			base := strings.Split(filepath.Dir(path), d.BaseDir)
-			baseName := base[len(base)-1]
-			if strings.HasSuffix(baseName, "embeddings") || strings.HasSuffix(baseName, "media") {
-				if ok, err := d.canSave(info.Name()); !ok || err != nil {
-					flag = false
-				}
+			return nil
+		}
+		t, err := os.Open(path)
+		defer t.Close()
+		name := strings.TrimPrefix(path, srcFile)
+		var flag = true
+		if strings.HasSuffix(name, "embeddings") || strings.HasSuffix(name, "media") {
+			if ok, err := d.canSave(info.Name()); !ok || err != nil {
+				flag = false
 			}
 		}
+
 		if flag {
-			_, err = archive.CreateHeader(header)
+			tf, err := archive.Create(name)
+			if err != nil {
+				return err
+			}
+			data, err := ioutil.ReadAll(t)
+			if err != nil {
+				return err
+			}
+			_, err = tf.Write(data)
 			if err != nil {
 				return err
 			}
@@ -427,7 +463,7 @@ func (d *Docx) Zip(destZip string) error {
 	return err
 }
 
-func MergeFiles(filelist []string, filename string) (err error) {
+func MergeFiles(filelist []string, filename string, page bool) (err error) {
 	if filelist == nil || len(filelist) == 0 {
 		return fmt.Errorf("filelist is nil")
 	}
@@ -435,7 +471,7 @@ func MergeFiles(filelist []string, filename string) (err error) {
 	if err != nil {
 		return
 	}
-	doc.Merge(filelist[1:], false, false)
+	doc.Merge(filelist[1:], page, false)
 	doc.Save(filename)
 	doc.Close()
 	return
@@ -454,4 +490,35 @@ func MakeNewDocument() (doc *Docx, err error) {
 	}
 	d.ClearContentWithoutHeader()
 	return
+}
+
+func (d *Docx) printline() {
+	p := path.Join(TEMP_BASE_DIR, d.BaseDir, "word/_rels/document.xml.rels")
+	s, err := ReadAll(p)
+	if err != nil {
+		return
+	}
+	fmt.Println("lines:", len(s))
+}
+
+func CopyFile(dstFileName string, srcFileName string) (written int64, err error) {
+	srcFile, err := os.Open(srcFileName)
+	if err != nil {
+		return
+	}
+	defer srcFile.Close()
+	//通过srcfile ,获取到 Reader
+	reader := bufio.NewReader(srcFile)
+
+	//打开dstFileName
+	dstFile, err := os.OpenFile(dstFileName, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return
+	}
+
+	//通过dstFile, 获取到 Writer
+	writer := bufio.NewWriter(dstFile)
+	defer dstFile.Close()
+
+	return io.Copy(writer, reader)
 }

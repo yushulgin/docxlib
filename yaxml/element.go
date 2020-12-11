@@ -65,7 +65,7 @@ func (e *Element) parserTag(tag string) {
 	if TypeTagEnd(tag) == 1 {
 		end--
 	}
-	tag = strings.Trim(strings.Trim(tag[1:end], " "), "\n")
+	tag = strings.Trim(strings.TrimSpace(tag[1:end]), "\n")
 	e.parserDetail(tag, true)
 }
 
@@ -93,33 +93,37 @@ func (e *Element) parserDetail(text string, name bool) {
 	if len(text) == 0 {
 		return
 	}
+	textRune := []rune(text)
 	var quotation = 0
-	var indexs = 0
-	for index := 0; index < len(text); index++ {
-		if text[index] == '"' {
+	var index = 0
+	for index = 0; index < len(textRune); index++ {
+		if textRune[index] == '"' {
 			quotation++
 		}
-		if text[index] == ' ' && quotation%2 == 0 {
+		if textRune[index] == ' ' && quotation%2 == 0 {
 			break
 		}
-		index++
-		indexs = index
 	}
-	if indexs == len(text)-1 {
+	if index == len(textRune)-1 {
 		if name {
-			e.parserName(text)
+			e.parserName(string(textRune))
 		} else {
-			e.parserAttr(text)
+			e.parserAttr(string(textRune))
 		}
 		return
 	} else {
 		if name {
-			e.parserName(text[:indexs])
+			e.parserName(string(textRune[:index]))
 		} else {
-			e.parserAttr(text[:indexs])
+			e.parserAttr(string(textRune[:index]))
 		}
 	}
-	e.parserDetail(text[indexs+1:], false)
+	if index >= len(textRune) {
+		return
+	}
+
+	e.parserDetail(string(textRune[index+1:]), false)
+
 }
 
 func (e *Element) Find(tagName string) (res *Element) {
@@ -164,9 +168,9 @@ func (e *Element) Extract() (err error) {
 }
 
 func (e *Element) Clear() {
-	for n := len(e.Chilren); n > 0; {
-		child := e.Chilren[n-1]
-		e.Chilren = e.Chilren[:n]
+	for len(e.Chilren) > 0 {
+		child := e.Chilren[len(e.Chilren)-1]
+		e.Chilren = e.Chilren[:len(e.Chilren)-1]
 		child.Parent = nil
 	}
 }
@@ -197,20 +201,19 @@ func (e *Element) ToString() string {
 		}
 		return doc
 	} else if e.Type == DOCUMENT_START {
-		doc = e.Name + "\n"
-		return doc
+		return e.Name + "\n"
 	} else if e.Type == TEXT || e.Type == ORIGINAL {
 		return e.Name
 	}
 	var tagName string
-	if e.Prefix != "" {
+	if e.Prefix == "" {
 		tagName = e.Name
 	} else {
 		tagName = e.Prefix + ":" + e.Name
 	}
 	attrs := make([]string, 0)
-	for _, key := range e.Attrs {
-		attrs = append(attrs, key+"=\""+e.Attrs[key]+"\"")
+	for key, value := range e.Attrs {
+		attrs = append(attrs, key+`="`+value+`"`)
 	}
 	attrstr := strings.Join(attrs, " ")
 	var space string
@@ -223,8 +226,10 @@ func (e *Element) ToString() string {
 	if len(e.Chilren) == 0 {
 		tag += "/>"
 		return tag
+	} else {
+		tag += ">"
 	}
-	tag += ">"
+
 	for _, child := range e.Chilren {
 		tag += child.ToString()
 	}
@@ -258,8 +263,9 @@ func eleInsert(position int, ele *Element, lst []*Element) (elist []*Element) {
 		elist = append(lst, ele)
 		return
 	}
-	elist = append(lst[:position], ele)
 	elist = append(elist, lst[position:]...)
+	tmp := append(lst[:position], ele)
+	elist = append(tmp, elist...)
 	return
 }
 

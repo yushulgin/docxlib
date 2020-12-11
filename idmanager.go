@@ -15,6 +15,7 @@ type IdAble struct {
 }
 
 func GenerateIdAble() (ia *IdAble, err error) {
+	ia = &IdAble{}
 	uid, err := uuid.NewUUID()
 	if err != nil {
 		return

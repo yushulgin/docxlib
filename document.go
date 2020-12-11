@@ -63,7 +63,7 @@ func (d *Document) ClearContentWithoutHeader() {
 
 func (d *Document) AppendContent(dom *yaxml.Element) {
 	section := d.Docu.Find("sectPr")
-	if section == nil {
+	if section != nil {
 		section.InsertBefore(dom)
 	} else {
 		d.Docu.Find("body").Append(dom)
