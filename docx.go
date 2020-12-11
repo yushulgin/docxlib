@@ -24,6 +24,11 @@ import (
 
 var TEMP_BASE_DIR = path.Join("/tmp", "/docx_temp")
 
+const (
+	LEFT  = "left"
+	RIGHt = "right"
+)
+
 type Docx struct {
 	*IdAble
 	Document        *Document
