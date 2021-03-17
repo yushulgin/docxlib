@@ -1,7 +1,7 @@
 package main
 
 import (
-	"docxlib"
+	"github.com/zhaohaiyu1996/docxlib"
 	"fmt"
 )
 
