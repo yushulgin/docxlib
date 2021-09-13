@@ -1,4 +1,4 @@
-module github.com/yuemoxi/docxlib
+module github.com/seasrain/docxlib
 
 go 1.15
 
