@@ -1,8 +1,8 @@
 package docxlib
 
 import (
-	"github.com/zhaohaiyu1996/docxlib/yaxml"
 	"fmt"
+	"github.com/seasrain/docxlib/yaxml"
 	"strings"
 )
 

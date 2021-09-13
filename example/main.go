@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/zhaohaiyu1996/docxlib"
 	"fmt"
+	"github.com/seasrain/docxlib"
 )
 
 func main() {

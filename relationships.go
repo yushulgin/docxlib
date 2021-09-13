@@ -1,7 +1,7 @@
 package docxlib
 
 import (
-	"github.com/zhaohaiyu1996/docxlib/yaxml"
+	"github.com/seasrain/docxlib/yaxml"
 	"strconv"
 	"strings"
 )
