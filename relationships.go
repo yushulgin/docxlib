@@ -1,9 +1,10 @@
 package docxlib
 
 import (
-	"github.com/seasrain/docxlib/yaxml"
 	"strconv"
 	"strings"
+
+	"github.com/haiyux/docxlib/yaxml"
 )
 
 type Relationships struct {

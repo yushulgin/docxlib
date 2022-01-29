@@ -1,8 +1,9 @@
 package docxlib
 
 import (
-	"github.com/seasrain/docxlib/yaxml"
 	"strings"
+
+	"github.com/haiyux/docxlib/yaxml"
 )
 
 type ContentTypes struct {

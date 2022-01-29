@@ -1,8 +1,9 @@
 package docxlib
 
 import (
-	"github.com/seasrain/docxlib/yaxml"
 	"strconv"
+
+	"github.com/haiyux/docxlib/yaxml"
 )
 
 var (

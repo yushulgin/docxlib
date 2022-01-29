@@ -2,8 +2,9 @@ package docxlib
 
 import (
 	"fmt"
-	"github.com/seasrain/docxlib/yaxml"
 	"strings"
+
+	"github.com/haiyux/docxlib/yaxml"
 )
 
 func GetBreakPage() (tag *yaxml.Element) {
