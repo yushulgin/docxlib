@@ -3,12 +3,12 @@ package docxlib
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"fmt"
 	"image"
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -77,6 +77,57 @@ func NewDocx(zipPath string, clearContent bool) (docx *Docx, err error) {
 		return
 	}
 	err = Unzip(zipPath, docx.FilePath)
+	if err != nil {
+		return
+	}
+
+	// TODO
+	_, err = docx.GetDocument()
+	_, err = docx.getContentTypes()
+	_, err = docx.GetRelationships(false)
+	docx.ReplaceMap = make(map[string]string, 0)
+	if clearContent {
+		docx.Document.ClearContentWithoutHeader()
+	}
+	docx.RelsDict = make(map[string]string, 0)
+	docx.RelsFiles = make(map[string]bool, 0)
+	docx.CurrentIdTarget = make(map[string]bool, 0)
+	return
+}
+
+func NewDocxFromByteSlice(data []byte, clearContent bool) (docx *Docx, err error) {
+	docx = &Docx{}
+	docx.IdAble, err = GenerateIdAble()
+	if err != nil {
+		return
+	}
+	exist, err := PathExists(TEMP_BASE_DIR)
+	if err != nil {
+		return
+	}
+	if !exist {
+		err = os.Mkdir(TEMP_BASE_DIR, 0777)
+		if err != nil {
+			return
+		}
+	}
+	// TODO
+	docx.Document = nil
+	docx.ContentTypes = nil
+	docx.Relationships = nil
+	docx.Numbering = ""
+	docx.Styles = ""
+	uid, err := uuid.NewUUID()
+	if err != nil {
+		return
+	}
+	docx.BaseDir = strings.ReplaceAll(uid.String(), "-", "")
+	docx.FilePath = path.Join(TEMP_BASE_DIR, docx.BaseDir)
+	err = os.Mkdir(docx.FilePath, 0777)
+	if err != nil {
+		return
+	}
+	err = UnzipFromByteSlice(data, docx.FilePath)
 	if err != nil {
 		return
 	}
@@ -242,6 +293,35 @@ func (d *Docx) Merge(filelist []string, page bool, remove bool) (err error) {
 	return
 }
 
+func (d *Docx) AppendFile(file []byte, page bool) (err error) {
+	partId := d.GetIdAndInc()
+	tFileBase := GenerateFileName("_append_file_", fmt.Sprintf("part%d", partId), false)
+	tFile := filepath.Join(d.FilePath, tFileBase)
+
+	reader := bytes.NewReader(file)
+
+	dstFile, err := os.OpenFile(tFile, os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		return
+	}
+
+	writer := bufio.NewWriter(dstFile)
+	defer dstFile.Close()
+
+	_, err = io.Copy(writer, reader)
+	if err != nil {
+		return
+	}
+
+	d.ContentTypes.AppendDocx(tFileBase)
+	rid := d.Relationships.AppendChunk(tFileBase)
+	if page {
+		d.Document.AppendPageBreak()
+	}
+	d.Document.AppendChunk(rid)
+	return
+}
+
 func (d *Docx) Save(name string) (err error) {
 	d.saveDocument()
 	d.saveContentTypes()
@@ -255,6 +335,21 @@ func (d *Docx) Save(name string) (err error) {
 		return
 	}
 	return
+}
+
+func (d *Docx) SaveToByteSlice() ([]byte, error) {
+	d.saveDocument()
+	d.saveContentTypes()
+
+	d.saveRelationships()
+
+	d.getCurrentIdTYarget(true)
+
+	res, err := d.ZipByteSlice()
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 func (d *Docx) saveDocument() (err error) {
@@ -321,7 +416,11 @@ func (d *Docx) Replace(src, des string) {
 }
 
 func (d *Docx) Close() {
-	_ = exec.Command(fmt.Sprintf("rm -rf %s", d.FilePath))
+	// _ = exec.Command(fmt.Sprintf("rm -rf %s", d.FilePath))
+	err := os.RemoveAll(d.FilePath)
+	if err != nil {
+		fmt.Println("Ошибка удаления временных файлов из папки: "+d.FilePath, err)
+	}
 }
 
 func (d *Docx) cpFile(filename string) (string, error) {
@@ -341,7 +440,42 @@ func Unzip(zipFile string, destDir string) error {
 	if err != nil {
 		return err
 	}
-	defer zipReader.Close()
+
+	for _, f := range zipReader.File {
+		fpath := filepath.Join(destDir, f.Name)
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(fpath, 0777)
+		} else {
+			if err = os.MkdirAll(filepath.Dir(fpath), 0777); err != nil {
+				return err
+			}
+
+			inFile, err := f.Open()
+			if err != nil {
+				return err
+			}
+			defer inFile.Close()
+
+			outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+			if err != nil {
+				return err
+			}
+			defer outFile.Close()
+
+			_, err = io.Copy(outFile, inFile)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func UnzipFromByteSlice(zipFile []byte, destDir string) error {
+	zipReader, err := zip.NewReader(bytes.NewReader(zipFile), int64(len(zipFile)))
+	if err != nil {
+		return err
+	}
 
 	for _, f := range zipReader.File {
 		fpath := filepath.Join(destDir, f.Name)
@@ -399,7 +533,7 @@ func ReadAll(filePth string) (string, error) {
 	return string(b), nil
 }
 
-//写入文件
+// 写入文件
 func writeStringToFile(filepath, content string) (err error) {
 	//打开文件，没有则创建，有则append内容
 	w1, err := os.OpenFile(filepath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
@@ -466,6 +600,57 @@ func (d *Docx) Zip(destZip string) error {
 	})
 
 	return err
+}
+
+func (d *Docx) ZipByteSlice() ([]byte, error) {
+	srcFile := d.FilePath + string(filepath.Separator)
+	buf := new(bytes.Buffer)
+
+	archive := zip.NewWriter(buf)
+	err := filepath.Walk(srcFile, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		t, err := os.Open(path)
+		defer t.Close()
+		name := strings.TrimPrefix(path, srcFile)
+		var flag = true
+		if strings.HasSuffix(name, "embeddings") || strings.HasSuffix(name, "media") {
+			if ok, err := d.canSave(info.Name()); !ok || err != nil {
+				flag = false
+			}
+		}
+
+		if flag {
+			tf, err := archive.Create(name)
+			if err != nil {
+				return err
+			}
+			data, err := ioutil.ReadAll(t)
+			if err != nil {
+				return err
+			}
+			_, err = tf.Write(data)
+			if err != nil {
+				return err
+			}
+		}
+		return err
+	})
+	if err != nil {
+		archive.Close()
+		return nil, err
+	}
+
+	err = archive.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), err
 }
 
 func MergeFiles(filelist []string, filename string, page bool) (err error) {
